@@ -123,8 +123,42 @@ cap program drop mvttest
 		if "`constrained'"=="" reghdfe `D' `c'`Z'`xabs'#`regno' if `touse', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
 		else reghdfe `D' `c'`Z'#`regno' if `touse', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
 		
-		loc N=e(N)
-		
+		//perform F-tests of A4 and A5
+		foreach Xgroup in `Xlevs' {
+			loc test4
+			loc test5
+			if "`X'"==""|"`constrained'"!="" loc loc pre
+			else loc pre `Xgroup'#
+			foreach j in `values' {
+				if `j'==`jzero' continue
+				capture di _b[`c'`Z'#`pre'`j'.`regno']
+				if _rc==0 {
+					if `j'<`jstar' {
+						loc test4 `test4' `c'`Z'#`pre'`j'.`regno'
+						loc test5 `test5' `c'`Z'#`pre'`j'.`regno' =				
+						}
+
+					else if `j'>`thresholdj' {
+						loc test4 `test4' `c'`Z'#`pre'`j'.`regno'
+						loc test5 `test5' `c'`Z'#`pre'`j'.`regno' =
+						}					
+					}
+				}
+			loc teststring4 `teststring4' (`test4')
+			loc teststring5 `teststring5' (`test5' `c'`Z'#`pre'`thresholdj'.`regno' )
+			}
+			
+
+		forvalues t=4/5 {
+			if "`teststring`t''"!="" {
+				test `teststring`t''
+				loc F_`t'=r(F)
+				loc p`t'=r(p)
+				loc df`t'=r(df)
+				loc df_r`t'=r(df_r)
+				}
+			}
+			
 		tempname b V
 		mat `b'=e(b)
 		mat `V'=e(V)
@@ -288,48 +322,12 @@ cap program drop mvttest
 		count if `touse'
 		ereturn post `b' `V', depname("`D'>=j") esample(`touse') obs(`r(N)')
 		
-		//perform Chi2-tests of A4 and A5
-		foreach Xgroup in `Xlevs' {
-			loc test4
-			loc test5
-			if "`X'"==""|"`constrained'"!="" loc loc pre
-			else loc pre `Xgroup'#
-			foreach j in `values' {
-				if `j'==`jzero' continue
-				capture di _b[`pre'`j'.j]
-				if _rc==0 {
-					if `j'<`jstar' {
-						loc test4 `test4' `pre'`j'.j
-						loc test5 `test5' `pre'`j'.j =				
-						}
-
-					else if `j'>`thresholdj' {
-						loc test4 `test4' `pre'`j'.j
-						loc test5 `test5' `pre'`j'.j =
-						}					
-					}
-				}
-			loc teststring4 `teststring4' (`test4')
-			loc teststring5 `teststring5' (`test5' `pre'`thresholdj'.j )
+		forvalues t=4/5 {
+			ereturn scalar F_`t'=`F_`t''
+			ereturn scalar p_val`t'=`p`t''
+			ereturn scalar df`t'=`df`t''
+			ereturn scalar df_r`t'=`df`t''
 			}
-			
-
-		if "`teststring4'"!="" {
-			test `teststring4'
-			loc chi2_4=r(chi2)
-			loc p4=r(p)
-			}
-		
-		if "`teststring5'"!="" {
-			test `teststring5'
-			loc chi2_5=r(chi2)
-			loc p5=r(p)
-			}
-		
-		ereturn scalar chi2_4=`chi2_4'
-		ereturn scalar p_val4=`p4'
-		ereturn scalar chi2_5=`chi2_5'
-		ereturn scalar p_val5=`p5'
 		
 		if "`cmi'"!="nocmi" {
 			foreach stat in stat cv01 cv05 cv10 pval {
@@ -370,10 +368,10 @@ cap program drop mvttest
 				di "{col 45}p-value {col 67}`: di %12.4f `cmi_pval''"
 				di "{hline 78}"
 				}
-			di "Test of Assumption 4: {col 45}Chi2-value {col 67}`: di %12.4f `chi2_4''"
+			di "Test of Assumption 4: {col 45}F(`df4',`df_r4') {col 67}`: di %12.4f `F_4''"
 			di "{col 5}all b_j=0 except b_`thresholdj' {col 45}p-value {col 67}`: di %12.4f `p4''"
 			di "{hline 78}"
-			di "Test of Assumption 5: {col 45}Chi2-value {col 67}`: di %12.4f `chi2_5''"
+			di "Test of Assumption 5: {col 45}F(`df5',`df_r5') {col 67}`: di %12.4f `F_5''"
 			di "{col 5}all b_j are the same {col 45}p-value {col 67}`: di %12.4f `p5''"
 			di "{hline 78}"
 
