@@ -169,10 +169,9 @@ cap program drop mvttest
 			tempvar jno
 			gen `jno'=_n
 			foreach j in `values' {
-				if (`j'==`jzero')|(`j'==`J'&"`plottype'"=="minmax") continue
+				if (`j'==`jzero') continue
 				loc ++no
-				if "`plottype"=="normal" loc xlabel `xlabel' `no' "`j'"
-				else loc xlabel `xlabel' `=`no'+1' "`j'"
+				if "`plottype'"=="normal"|`no'>1 loc xlabel `xlabel' `no' "`j'"
 				if `j'>=`jstar'&"`xline'"=="" {
 					if "`plottype'"=="normal" loc xline=`=`no'-0.5'
 					else loc xline=`=`no'+0.5'
