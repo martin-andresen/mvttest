@@ -13,7 +13,7 @@
 {title:Syntax}
 
 {p 8 11 2}
-{cmd:mvttest} {depvar:} {varname:_iv} [{indepvars:}] {ifin}, {opt jstar:(#)} [{opt cmi:opts(string)} {opt graph:opts(string)} {opt noplot} {opt nocmi} {opt constrained}]
+{cmd:mvttest} {depvar:} {varname:_iv} [{indepvars:}] {ifin}, {opt jstar:(#)} [{opt cmi:opts(string)} {opt graph:opts(string)} {opt noplot} {opt nocmi}]
 
 {synoptset 25 tabbed}{...}
 {synopthdr}
@@ -25,7 +25,6 @@
 {synopt:{opt graph:opts{string}}}options for the graph. Overrides default looks. See {helpb twoway_options}{p_end}
 {synopt:{opt nocmi}}turns off condititional moment inequality tests.{p_end}
 {synopt:{opt noplot}}Does not display graph.{p_end}
-{synopt:{opt constrained}}Constrains coefficients to be the same across cells when using controls.{p_end}
 
 {p2colreset}{...}
 {p 4 6 2}
@@ -34,8 +33,8 @@
 {title:Description}
 
 {pstd}
-{cmd:mvttest} performs tests of instrument validity of an instrument in settings where 
-a multivalued treatment is binarized, see Andresen and Huber (2018).
+{cmd:mvttest} performs F-and conditional moment inequality tests of instrument validity in settings where 
+a multivalued treatment is binarized, see Andresen and Huber (2020).
 
 
 {marker remarks}{...}
@@ -48,8 +47,7 @@ where j* is a threshold value.{p_end}
 
 {pstd}{cmd:mvvtest} first performs a multivariate regression of all possible binary 
 treatment indicators on the instrument using {cmd:reghdfe}. If [{indepvars:}] is specified, these
-coefficients are estimated separately in cells of the independent variable  unless the option 
-constrained is specified.{p_end}
+coefficients are estimated separately in cells of the independent variables.{p_end}
 
 {pstd}Unless "noplot" is specified results are presented graphically. If no controls are used, the 
 coefficients are plotted across j. If controls are used, mvttest instead plots the maximum violation
@@ -114,7 +112,7 @@ et al. (2013), implemented usingin {helpb cmi_test}.{p_end}
 {title:References}
 
 {phang}
-Andresen, M. E. and M. Huber 2018. "Testable implications of the exclusion restriction with binarized multivalued treatments", FSES working paper 492
+Andresen, M. E. and M. Huber 2020. "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", working paper
 
 {phang}
 Andrews, D., and X. Shi. 2013. "Inference based on conditional moment inequalities", Econometrica, Vol.81, No. 2, 609-666.
