@@ -47,27 +47,6 @@ cap program drop mvttest
 				}
 			}
 		
-		levelsof `D', local(values)
-		local numvals: word count `values'
-		if `numvals'<=2 {
-			noi di in red "Treatment `D' not multivalued"
-			exit
-			}
-		
-		su `D'
-		loc J=r(max)
-		loc jzero=r(min)
-		
-		loc no=0
-		foreach j in `values' {
-			if `j'<`jstar' loc valuesbelow `valuesbelow' `j'
-			if `j'>=`jstar' {
-				loc ++no
-				if `no'==1 loc thresholdj=`j'
-				else loc valuesabove `valuesabove' `j'
-				}
-			}
-		
 		tempvar id regno group d expand
 		gen `id'=_n
 				
@@ -80,9 +59,9 @@ cap program drop mvttest
 				while `count'!=0 {
 					bys `group': gen `N_g'=_N 
 					count if `N_g'==1
+					noi drop if `N_g'==1
 					loc count=r(N)
 					loc totcount=`totcount'+`count'
-					replace `touse'=`touse'&`N_g'>1
 					}
 				if `totcount'>0 noi di as text "Note: Dropped `totcount' observations in singleton groups."
 				}
@@ -106,6 +85,28 @@ cap program drop mvttest
 			loc Xlevs 1
 			}
 		levelsof `group' if `touse', local(grouplevs)
+		
+		//determine levels of D
+		levelsof `D', local(values)
+		local numvals: word count `values'
+		if `numvals'<=2 {
+			noi di in red "Treatment `D' not multivalued"
+			exit
+			}
+		
+		su `D'
+		loc J=r(max)
+		loc jzero=r(min)
+		
+		loc no=0
+		foreach j in `values' {
+			if `j'<`jstar' loc valuesbelow `valuesbelow' `j'
+			if `j'>=`jstar' {
+				loc ++no
+				if `no'==1 loc thresholdj=`j'
+				else loc valuesabove `valuesabove' `j'
+				}
+			}
 			
 	
 		//expand and estimate b_j
@@ -127,10 +128,11 @@ cap program drop mvttest
 				if `no'>1 bys `id': replace `regno'=`dval' if `group'==`xgroup'&_n==`no'-1
 				}
 			}
+		
 		replace `D'=`D'>=`regno'
 
 		reghdfe `D' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
-		
+				
 		//perform F-tests of A4 and A5
 		foreach Xgroup in `Xlevs' {
 			loc test4
@@ -183,66 +185,76 @@ cap program drop mvttest
 		if "`plot'"!="noplot" {
 			if `J'>20 loc small ,labsize(vsmall) angle(90)
 			if "`X'"!="" {
-				loc i=0
-				foreach val in `values' {
-					loc ++i
-					if `i'==2 loc prevval=`val'
-					if `i'<=2 continue
-					loc maxvio
-					loc maxparm
-					foreach xgroup in `Xlevs' {
-						if `prevval'<`jstar' cap loc testval=_b[`c'`Z'#`xgroup'#`prevval'.`regno']-_b[`c'`Z'#`xgroup'#`val'.`regno']
-						else cap loc testval=_b[`c'`Z'#`xgroup'#`val'.`regno']-_b[`c'`Z'#`xgroup'#`prevval'.`regno']
-						if _rc==0 {
-							if "`maxvio'"=="" loc maxvio=`testval'
-							else if `testval'>`maxvio' loc maxvio=`testval'
-							if `maxvio'==`testval' loc maxparm `testval'
-							}
-						}
-					loc maxparms `maxparms' `maxparm'
-					loc prevval=`val'
+				tempname orig noX maxvios
+				est sto `orig'
+				reghdfe `D' `c'`Z'#`regno', absorb(`regno'`xabs') nosample `keepsingletons' nocons
+				est sto `noX'
+				est restore `orig'
+				parmest, norestore
+				drop if stderr==0
+				split parm, parse(#)
+				loc nvars=r(nvars)
+				split parm`nvars', parse(.)
+				destring parm`nvars'1, ignore(o b) replace
+				rename parm`nvars'1 j
+				forvalues n=2/`=`nvars'-1' {
+					if `n'==2 loc gen parm`n'
+					else loc gen `gen'+parm`n'
 					}
-				
-				reghdfe `D' `c'`Z'#`regno', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons	
+				gen str group=`gen'
+				sort group j
+				by group: gen maxvio=estimate-estimate[_n+1] if j<`jstar'
+				by group: replace maxvio=-(estimate-estimate[_n+1]) if j>=`jstar'
+				drop if maxvio==.
+				sort j maxvio
+				bys j: drop if _n!=_N
+				keep maxvio j
+				save `maxvios', replace
+				est restore `noX'
 				}
-				
+					
 			parmest, norestore
-			tempvar jno vio maxvio jnomax
+			split parm, parse(#)
+			split parm2, parse(.)
+			destring parm21, replace ignore(o b)
+			rename parm21 j
 			
-			loc no=0
-			foreach j in `values' {
-				loc ++no
-				if "`X'"==""&`j'!=`jzero'|("`X'"!=""&!inlist(`j',`jzero',`J')) loc xlabel `xlabel' `=`no'-1' "`j'"			
-				if `j'>=`jstar'&"`xline'"=="" loc xline=`=`no'-1.5'
-				}
-			
-			if "`X'"!="" {
-				gen `vio'=estimate[_n-1]-estimate[_n] if _n<`xline'+1
-				replace `vio'=estimate[_n]-estimate[_n-1] if _n>=`xline'+1
-				drop if `vio'==.
-				gen double `maxvio'=.
-				
-				loc i=0
-				foreach val in `maxparms' {
-					loc ++i
-					replace `maxvio'=`val' in `i'
+			if "`X'"=="" {
+				levelsof j, local(levj)
+				loc no=0
+				foreach lev in `levj' {
+					loc ++no
+					loc xlabels `xlabels' `no' "`lev'"
+					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
 					}
-				gen `jno'=_n-0.2
-				gen `jnomax'=_n+0.2
+				gen jno=_n
+				twoway (bar estimate jno, color(navy) lcolor(white) lwidth(medium)) (rcap min95 max95 jno, color(navy)) ///
+					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
+					xtitle("`D' at least") legend(off) title("First stage effect using various thresholds") ///
+					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
+				}
+			else {
+				gen vio=estimate-estimate[_n+1] if j<`jstar'
+				replace vio=-(estimate-estimate[_n+1]) if j>=`jstar'
+				drop if vio==.
+				merge 1:1 j using `maxvios', nogen
+				levelsof j, local(levj)
+				loc no=0
+				foreach lev in `levj' {
+					loc ++no
+					loc xlabels `xlabels' `no' "`lev'"
+					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
+					}
+				gen jno=_n-0.2
+				gen jmax=jno+0.4
 
-				twoway (bar `vio' `jno', color(navy) lcolor(white) lwidth(medium) barwidth(0.4)) (bar `maxvio' `jnomax', color(maroon) lcolor(white) lwidth(medium) barwidth(0.4)) ///
+				twoway (bar vio jno, color(navy) lcolor(white) lwidth(medium) barwidth(0.4)) (bar maxvio jmax, color(maroon) lcolor(white) lwidth(medium) barwidth(0.4)) ///
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
 					xtitle("value of j") title("Maximum violation across cells of X") ///
 					legend(label(1 "violation without X") label(2 "maximum violation across cells of X") ring()) ///
-					xlabel(`xlabel' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
+					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
 				}
-			else {
-				gen `jno'=_n
-				twoway (bar estimate `jno', color(navy) lcolor(white) lwidth(medium)) (rcap min95 max95 `jno', color(navy)) ///
-					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
-					xtitle("`D' at least") legend(off) title("First stage effect using various thresholds") ///
-					xlabel(`xlabel' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
-				}
+		
 				
 			}
 			
@@ -335,7 +347,7 @@ cap program drop mvttest
 			
 			di _newline
 			di "First stage effect of `Z' for various thresholds"
-			eret di, allbaselevels
+			eret di, noemptycells
 			if "`cmi'"!="nocmi" {
 				di "CMI-test of Assumption 3: {col 45}`stattype' test statistic {col 67}`: di %12.4f `cmi_stat''"
 				di "{col 45}Critical value, 1% {col 67}`: di %12.4f `cmi_cv01''"
