@@ -1,4 +1,4 @@
-*! mvttest v 0.9 14apr2020
+*! mvttest v 0.9 20apr2020
 *! Author: Martin E. Andresen
 *! For "Testing Binarized Treatments: Issues and tests for the exclusion restriction, joint with Martin Huber
 
