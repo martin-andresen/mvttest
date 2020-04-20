@@ -74,7 +74,8 @@ cap program drop mvttest
 				else loc Xspand `Xspand'#`var'
 				}
 			fvexpand `Xspand' if `touse'
-			loc Xlevs `r(varlist)'		
+			loc Xlevs `r(varlist)'
+			loc levelsX: word count `r(varlist)'
 			
 			foreach var in `X' {
 				loc xabs `xabs'#`var'
@@ -232,6 +233,8 @@ cap program drop mvttest
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
 					xtitle("`D' at least") legend(off) title("First stage effect using various thresholds") ///
 					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
+				
+
 				}
 			else {
 				gen vio=estimate-estimate[_n+1] if j<`jstar'
@@ -253,6 +256,9 @@ cap program drop mvttest
 					xtitle("value of j") title("Maximum violation across cells of X") ///
 					legend(label(1 "violation without X") label(2 "maximum violation across cells of X") ring()) ///
 					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
+					
+				est restore `orig'
+				est drop `orig' `noX'
 				}
 		
 				
@@ -262,7 +268,37 @@ cap program drop mvttest
 
 		//CMI-test
 		if "`cmi'"!="nocmi" {
+			
+			//determine coef comparisons  - drop j if beta_j+1 and beta_j cannot both be estimated (within a cell of  X)
+			if "`X'"!="" {
+				preserve
+				parmest, norestore
+				drop if stderr==0
+				split parm, parse(#)
+				loc nvars=r(nvars)
+				split parm`nvars', parse(.)
+				destring parm`nvars'1, ignore(o b) replace
+				rename parm`nvars'1 j
+				forvalues n=2/`=`nvars'-1' {
+					if `n'==2 loc gen parm`n'
+					else loc gen `gen'+parm`n'
+					}
+				gen str group=`gen'
+				sort group j
+				bys group: drop if _n==1
+				levelsof j, local(levj)
+				count
+				loc ineq_cells=r(N)
+				restore
+				}
+			else {
+				gettoken drop levj: values
+				gettoken drop levj: levj
+				loc ineq_cells: word count `levj'
+				}
 				
+				
+			//construct moment inqualities	
 			if "`X'"!="" {
 				tempvar zbar
 				egen `group'=group(`X')
@@ -280,12 +316,13 @@ cap program drop mvttest
 			
 			tempvar d
 			gen `d'=.
+			
+			
 			loc N_ineq=0 
-
-			foreach j in `values' {
-				if `j'==`jzero'|`j'==`J' continue
-				replace `d'=`D'==`j' if `touse'			
+			foreach j in `levj' {
 				loc ++N_ineq
+				replace `d'=`D'==`j' if `touse'		
+				
 				tempvar moment`N_ineq' 
 				if "`c'"=="c." {	
 					if "`X'"=="" {
@@ -296,8 +333,8 @@ cap program drop mvttest
 						cap drop `dbar'
 						bys `group': egen `dbar'=mean(`d') if `touse'
 						}
-					if `j'<`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
-					else gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
+					if `j'<=`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
+					else 				gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
 					}
 				else {
 					if `j'<`jstar' 	gen double `moment`N_ineq''=`d'*(`zbar'-`Z')/(`zbar'*(1-`zbar')) if `touse'
@@ -305,8 +342,9 @@ cap program drop mvttest
 					}
 				
 				loc moments `moments' `moment`N_ineq''
-				}
 				
+				}
+			
 			cmi_test (`moments') () `group' if `touse', `cmi_opts'
 			foreach stat in stat cv01 cv05 cv10 pval {
 				loc cmi_`stat'=r(`stat')
@@ -318,11 +356,13 @@ cap program drop mvttest
 		ereturn post `b' `V', depname("`D'>=j") esample(`touse') obs(`r(N)')
 		
 		forvalues t=4/5 {
-			ereturn scalar F_`t'=`F_`t''
+			ereturn scalar F`t'=`F_`t''
 			ereturn scalar p_val`t'=`p`t''
 			ereturn scalar df`t'=`df`t''
 			ereturn scalar df_r`t'=`df_r`t''
 			}
+		if `levelsX'>0 ereturn scalar levels_X=`levelsX'
+		else eretrun scalar levels_X=1
 		
 		if "`cmi'"!="nocmi" {
 			foreach stat in stat cv01 cv05 cv10 pval {
@@ -330,6 +370,7 @@ cap program drop mvttest
 				}
 		
 			ereturn scalar N_ineq=`N_ineq'
+			ereturn scalar N_ineqcells=`ineq_cells'
 			}
 		
 		ereturn local title 	"Tests of instrument validity with multivalued binarized treatment"

@@ -78,11 +78,13 @@ et al. (2013), implemented usingin {helpb cmi_test}.{p_end}
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Scalars}{p_end}
 {synopt:{cmd:e(N)}}number of observations{p_end}
-{synopt:{cmd:e(chi2_4)}}Chi2-stat for the test of Assumption 4{p_end}
+{synopt:{cmd:e(levels_X)}}Number of cells of X{p_end}
+{synopt:{cmd:e(F4)}}F-stat for the test of Assumption 4{p_end}
 {synopt:{cmd:e(p_val4)}}p-value for the F-test of Assumption 4{p_end}
-{synopt:{cmd:e(chi2_5)}}Chi2-stat for the test of Assumption 5{p_end}
+{synopt:{cmd:e(F5)}}F-stat for the test of Assumption 5{p_end}
 {synopt:{cmd:e(p_val5)}}p-value for the F-test of Assumption 5{p_end}
-{synopt:{cmd:e(N_ineq)}}number of inequalities tested{p_end}
+{synopt:{cmd:e(N_ineq)}}number of inequalities tested (number of beta_j+1-beta_j pairs){p_end}
+{synopt:{cmd:e(N_ineqcells)}}number of inequalities by cells tested{p_end}'
 {synopt:{cmd:e(cmi_stat)}}The test statistic for the CMI-test of Assumption 2{p_end}
 {synopt:{cmd:e(cmi_cv01)}}1% critical value for the CMI-test{p_end}
 {synopt:{cmd:e(cmi_cv05)}}5% critical value for the CMI-test{p_end}
