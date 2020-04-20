@@ -361,7 +361,7 @@ cap program drop mvttest
 			ereturn scalar df`t'=`df`t''
 			ereturn scalar df_r`t'=`df_r`t''
 			}
-		if `levelsX'>0 ereturn scalar levels_X=`levelsX'
+		if "`levelsX'"!="" ereturn scalar levels_X=`levelsX'
 		else eretrun scalar levels_X=1
 		
 		if "`cmi'"!="nocmi" {
