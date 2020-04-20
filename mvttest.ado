@@ -270,34 +270,29 @@ cap program drop mvttest
 		if "`cmi'"!="nocmi" {
 			
 			//determine coef comparisons  - drop j if beta_j+1 and beta_j cannot both be estimated (within a cell of  X)
+			preserve
+			parmest, norestore
+			drop if stderr==0
+			split parm, parse(#)
+			loc nvars=r(nvars)
+			split parm`nvars', parse(.)
+			destring parm`nvars'1, ignore(o b) replace
+			rename parm`nvars'1 j
 			if "`X'"!="" {
-				preserve
-				parmest, norestore
-				drop if stderr==0
-				split parm, parse(#)
-				loc nvars=r(nvars)
-				split parm`nvars', parse(.)
-				destring parm`nvars'1, ignore(o b) replace
-				rename parm`nvars'1 j
 				forvalues n=2/`=`nvars'-1' {
 					if `n'==2 loc gen parm`n'
 					else loc gen `gen'+parm`n'
 					}
 				gen str group=`gen'
-				sort group j
-				bys group: drop if _n==1
-				levelsof j, local(levj)
-				count
-				loc ineq_cells=r(N)
-				restore
 				}
-			else {
-				gettoken drop levj: values
-				gettoken drop levj: levj
-				loc ineq_cells: word count `levj'
-				}
-				
-				
+			else  rename parm1 group
+			sort group j
+			bys group: drop if _n==_N
+			levelsof j, local(levj)
+			count
+			loc ineq_cells=r(N)
+			restore
+							
 			//construct moment inqualities	
 			if "`X'"!="" {
 				tempvar zbar
@@ -333,7 +328,7 @@ cap program drop mvttest
 						cap drop `dbar'
 						bys `group': egen `dbar'=mean(`d') if `touse'
 						}
-					if `j'<=`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
+					if `j'<`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
 					else 				gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
 					}
 				else {
