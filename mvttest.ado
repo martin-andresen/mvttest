@@ -362,7 +362,7 @@ cap program drop mvttest
 			ereturn scalar df_r`t'=`df_r`t''
 			}
 		if "`levelsX'"!="" ereturn scalar levels_X=`levelsX'
-		else eretrun scalar levels_X=1
+		else ereturn scalar levels_X=1
 		
 		if "`cmi'"!="nocmi" {
 			foreach stat in stat cv01 cv05 cv10 pval {
