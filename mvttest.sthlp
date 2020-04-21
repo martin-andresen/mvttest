@@ -67,9 +67,25 @@ Both these conditions can be tested using Chi2-tests.{p_end}
 {p 10} b_{j+1}<=b_j for all j>=j*{p_end}
 
 {pstd}This is tested in the conditional moment equality/inequality framework of Andrews
-et al. (2013), implemented usingin {helpb cmi_test}.{p_end}
+et al. (2013), implemented using {helpb cmi_test}.{p_end}
 
-{marker saved_results}{...}
+{marker examples}{...}
+{title:Examples}
+
+{pstd}
+Download data from NLSYM, used by Card (1995) {p_end}
+{phang2}{stata sysuse "card iv data r", clear: {cmd:. sysuse "card iv data r", clear}} ({it:click to run}){p_end}
+
+{pstd}
+Perform tests of instrument validity for the nearc4 instrument, instrumenting for treatment defined as years of education >=16{p_end}
+{phang2}{stata mvttest educ nearc4, jstar(16): {cmd:. mvttest educ nearc4, jstar(16)}} ({it:click to run}){p_end}
+
+{pstd}
+Looking for violations within cells of smsa and region:{p_end}
+{phang2}{stata mvttest educ nearc4 smsa region, jstar(16): {cmd:. mvttest educ nearc4 smsa region, jstar(16)}} ({it:click to run}){p_end}
+
+
+{marker stored_results}{...}
 {title:Stored results}
 
 {pstd}
@@ -78,11 +94,13 @@ et al. (2013), implemented usingin {helpb cmi_test}.{p_end}
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Scalars}{p_end}
 {synopt:{cmd:e(N)}}number of observations{p_end}
-{synopt:{cmd:e(levels_X)}}Number of cells of X{p_end}
+{synopt:{cmd:e(levels_X)}}Number of cells of indepvars{p_end}
 {synopt:{cmd:e(F4)}}F-stat for the test of Assumption 4{p_end}
 {synopt:{cmd:e(p_val4)}}p-value for the F-test of Assumption 4{p_end}
+{synopt:{cmd:e(df4)}}Constraints tested for the F-test of Assumption 4{p_end}
 {synopt:{cmd:e(F5)}}F-stat for the test of Assumption 5{p_end}
 {synopt:{cmd:e(p_val5)}}p-value for the F-test of Assumption 5{p_end}
+{synopt:{cmd:e(df5)}}Constraints tested for the F-test of Assumption 5{p_end}
 {synopt:{cmd:e(N_ineq)}}number of inequalities tested (number of beta_j+1-beta_j pairs){p_end}
 {synopt:{cmd:e(N_ineqcells)}}number of inequalities by cells tested{p_end}'
 {synopt:{cmd:e(cmi_stat)}}The test statistic for the CMI-test of Assumption 2{p_end}
@@ -110,6 +128,8 @@ et al. (2013), implemented usingin {helpb cmi_test}.{p_end}
 
 {p2colreset}{...}
 
+
+
 {marker references}{...}
 {title:References}
 
@@ -121,6 +141,9 @@ Andrews, D., and X. Shi. 2013. "Inference based on conditional moment inequaliti
 
 {phang}
 Andrews, D., W. Kim and X. Shi. 2017. "Commands for testing conditional moment inequalities and equalities", Stata Journal, Vol.17, No. 1, 56-72.
+
+{phang}
+Card, D. 1995. "Using geographic variation in college proximity to estimate the return to schooling", In "Aspects of labour market behavior: Essays in honour of John Vanderkamp", pp. 201-222, University of Toronto Press, Toronto.
 
 
 {marker Author}{...}
