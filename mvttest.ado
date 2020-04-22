@@ -47,7 +47,7 @@ cap program drop mvttest
 				}
 			}
 		
-		tempvar id regno group d expand
+		tempvar id regno group d expand include
 		gen `id'=_n
 				
 		//drop singleton groups, determine cells of X
@@ -59,7 +59,7 @@ cap program drop mvttest
 				while `count'!=0 {
 					bys `group': gen `N_g'=_N 
 					count if `N_g'==1
-					noi drop if `N_g'==1
+					drop if `N_g'==1
 					loc count=r(N)
 					loc totcount=`totcount'+`count'
 					}
@@ -111,28 +111,31 @@ cap program drop mvttest
 			
 	
 		//expand and estimate b_j
-		gen `expand'=.
-		foreach xgroup in `grouplevs' {
-			levelsof `D' if `group'==`xgroup', local(xvals)
-			local num: word count `xvals'
-			replace `expand'=`num'-1 if `group'==`xgroup'
+		expand `=`numvals'-1'
+		loc no=0
+		gen `regno'=.
+		foreach j in `values' {
+			if `j'==`jzero' continue
+			loc ++no
+			bys `id': replace `regno'=`j' if _n==`no'
 			}
 		
-		expand `expand'
-		gen `regno'=.
-
-		foreach xgroup in `grouplevs' {
+		gen byte `include'=0
+		if "`X'"!="" foreach xgroup in `grouplevs' {
 			levelsof `D' if `group'==`xgroup', local(xvals)
 			loc no=0
-			foreach dval in `xvals' {
+			foreach j in `xvals' {
 				loc ++no
-				if `no'>1 bys `id': replace `regno'=`dval' if `group'==`xgroup'&_n==`no'-1
+				if `no'==1 continue
+				replace `include'=1 if `group'==`xgroup'&`regno'==`j'
 				}
 			}
+		else replace `include'=1
+	
 		
 		replace `D'=`D'>=`regno'
 
-		reghdfe `D' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
+		reghdfe `D' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
 				
 		//perform F-tests of A4 and A5
 		foreach Xgroup in `Xlevs' {
@@ -188,7 +191,7 @@ cap program drop mvttest
 			if "`X'"!="" {
 				tempname orig noX maxvios
 				est sto `orig'
-				reghdfe `D' `c'`Z'#`regno', absorb(`regno'`xabs') nosample `keepsingletons' nocons
+				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `id')
 				est sto `noX'
 				est restore `orig'
 				parmest, norestore
