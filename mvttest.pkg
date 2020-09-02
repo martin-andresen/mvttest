@@ -1,9 +1,9 @@
-v 0.9
+v 1.0
 d mvttest - tests of the exclusion restriction with multivalued, binarized treatments
 d
 d {bf:M. E. Andresen, Research department, Statistics Norway}
 d Tests of the exclusion restriction with multivalued, binarized treatments.  After installation, see help {bf:mvttest}.
 d
-d Distribution-Date: 20200420
+d Distribution-Date: 2020902
 f mvttest.ado
 f mvttest.sthlp
