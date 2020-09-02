@@ -1,6 +1,6 @@
-*! mvttest v 0.9 20apr2020
+*! mvttest v 1.0 02sep2020
 *! Author: Martin E. Andresen
-*! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction, joint with Martin Huber
+*! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
 cap program drop mvttest
 {
@@ -48,7 +48,6 @@ cap program drop mvttest
 			}
 		
 		tempvar id regno group d expand include
-		gen `id'=_n
 				
 		//drop singleton groups, determine cells of X
 		if "`X'"!="" {
@@ -108,9 +107,14 @@ cap program drop mvttest
 				else loc valuesabove `valuesabove' `j'
 				}
 			}
-			
-	
+		
+		if "`cmi'"!="nocmi" {
+			tempfile tmpdata
+			save `tmpdata', replace
+			}
+		
 		//expand and estimate b_j
+		gen `id'=_n
 		expand `=`numvals'-1'
 		loc no=0
 		gen `regno'=.
@@ -137,10 +141,10 @@ cap program drop mvttest
 
 		reghdfe `D' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
 				
-		//perform F-tests of A4 and A5
+		//perform F-tests of A3* and A4
 		foreach Xgroup in `Xlevs' {
+			loc test3star
 			loc test4
-			loc test5
 			if "`X'"=="" loc loc pre
 			else loc pre `Xgroup'#
 			foreach j in `values' {
@@ -148,21 +152,21 @@ cap program drop mvttest
 				capture di _b[`c'`Z'#`pre'`j'.`regno']
 				if _rc==0 {
 					if `j'<`jstar' {
-						loc test4 `test4' `c'`Z'#`pre'`j'.`regno'
-						loc test5 `test5' `c'`Z'#`pre'`j'.`regno' =				
+						loc test3star `test3star' `c'`Z'#`pre'`j'.`regno'
+						loc test4 `test4' `c'`Z'#`pre'`j'.`regno' =				
 						}
 					else if `j'>`thresholdj' {
-						loc test4 `test4' `c'`Z'#`pre'`j'.`regno'
-						loc test5 `test5' `c'`Z'#`pre'`j'.`regno' =
+						loc test3star `test3star' `c'`Z'#`pre'`j'.`regno'
+						loc test4 `test4' `c'`Z'#`pre'`j'.`regno' =
 						}					
 					}
 				}
-			loc teststring4 `teststring4' (`test4')
-			loc teststring5 `teststring5' (`test5' `c'`Z'#`pre'`thresholdj'.`regno' )
+			loc teststring3star `teststring3star' (`test3star')
+			loc teststring4 `teststring4' (`test4' `c'`Z'#`pre'`thresholdj'.`regno' )
 			}
 			
 
-		forvalues t=4/5 {
+		foreach t in 3star 4 {
 			if "`teststring`t''"!="" {
 				test `teststring`t''
 				loc F_`t'=r(F)
@@ -187,15 +191,25 @@ cap program drop mvttest
 		
 		//plot figure
 		if "`plot'"!="noplot" {
+			tempname r
 			if `J'>20 loc small ,labsize(vsmall) angle(90)
 			if "`X'"!="" {
 				tempname orig noX maxvios
 				est sto `orig'
 				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `id')
+				clear
 				est sto `noX'
 				est restore `orig'
-				parmest, norestore
-				drop if stderr==0
+				eret di, level(95)
+				mat `r'=r(table)'
+				loc parmnames: rownames `r'
+				svmat `r', names(col)
+				loc i=0
+				gen parm=""
+				foreach name in `parmnames' {
+					loc ++i
+					replace parm="`name'" in `i'
+					}
 				split parm, parse(#)
 				loc nvars=r(nvars)
 				split parm`nvars', parse(.)
@@ -207,8 +221,8 @@ cap program drop mvttest
 					}
 				gen str group=`gen'
 				sort group j
-				by group: gen maxvio=estimate-estimate[_n+1] if j<`jstar'
-				by group: replace maxvio=-(estimate-estimate[_n+1]) if j>=`jstar'
+				by group: gen maxvio=b-b[_n+1] if j<`jstar'
+				by group: replace maxvio=-(b-b[_n+1]) if j>=`jstar'
 				drop if maxvio==.
 				sort j maxvio
 				bys j: drop if _n!=_N
@@ -216,8 +230,18 @@ cap program drop mvttest
 				save `maxvios', replace
 				est restore `noX'
 				}
-					
-			parmest, norestore
+			
+			clear
+			eret di, level(95)
+			mat `r'=r(table)'
+			svmat `r', names(col)
+			loc parmnames: rownames `r'
+			loc i=0
+			gen parm=""
+			foreach name in `parmnames' {
+				loc ++i
+				replace parm="`name'" in `i'
+				}
 			split parm, parse(#)
 			split parm2, parse(.)
 			destring parm21, replace ignore(o b)
@@ -232,18 +256,19 @@ cap program drop mvttest
 					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
 					}
 				gen jno=_n
-				twoway (bar estimate jno, color(navy) lcolor(white) lwidth(medium)) (rcap min95 max95 jno, color(navy)) ///
+				twoway (bar b jno, color(navy) lcolor(white) lwidth(medium)) (rcap ll ul jno, color(navy)) ///
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
 					xtitle("`D' at least") legend(off) title("First stage effect using various thresholds") ///
 					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
 				
 
 				}
+				
 			else {
-				gen vio=estimate-estimate[_n+1] if j<`jstar'
-				replace vio=-(estimate-estimate[_n+1]) if j>=`jstar'
+				gen vio=b-b[_n+1] if j<`jstar'
+				replace vio=-(b-b[_n+1]) if j>=`jstar'
 				drop if vio==.
-				merge 1:1 j using `maxvios', nogen
+				merge 1:1 j using `maxvios', nogen keep(1 3)
 				levelsof j, local(levj)
 				loc no=0
 				foreach lev in `levj' {
@@ -263,19 +288,29 @@ cap program drop mvttest
 				est restore `orig'
 				est drop `orig' `noX'
 				}
+			
 		
 				
 			}
 			
-		restore
-
+		
 		//CMI-test
+		
 		if "`cmi'"!="nocmi" {
-			
+					
 			//determine coef comparisons  - drop j if beta_j+1 and beta_j cannot both be estimated (within a cell of  X)
-			preserve
-			parmest, norestore
-			drop if stderr==0
+			clear
+			eret di, level(95)
+			mat `r'=r(table)'
+			loc parmnames: rownames `r'
+			svmat `r', names(col)
+			loc i=0
+			gen parm=""
+			foreach name in `parmnames' {
+				loc ++i
+				replace parm="`name'" in `i'
+				}
+			drop if se==0|se==.
 			split parm, parse(#)
 			loc nvars=r(nvars)
 			split parm`nvars', parse(.)
@@ -294,20 +329,16 @@ cap program drop mvttest
 			levelsof j, local(levj)
 			count
 			loc ineq_cells=r(N)
-			restore
-							
+
+			
 			//construct moment inqualities	
+			u `tmpdata', clear
 			if "`X'"!="" {
 				tempvar zbar
-				egen `group'=group(`X')
-				bys `group': gen `N_g'=_N if `touse'
 				bys `group': egen double `zbar'=mean(`Z') if `touse'
-				count if `N_g'==1&`touse'
-				replace `touse'=`touse'&`N_g'>1
 				if "`c'"=="c." tempvar dbar
 				}
 			else {
-				gen `group'=1
 				su `Z' if `touse', meanonly
 				loc zbar=r(mean)	
 				}
@@ -318,6 +349,7 @@ cap program drop mvttest
 			
 			loc N_ineq=0 
 			foreach j in `levj' {
+				if inlist(`j',`jzero',`J') continue
 				loc ++N_ineq
 				replace `d'=`D'==`j' if `touse'		
 				
@@ -332,7 +364,7 @@ cap program drop mvttest
 						bys `group': egen `dbar'=mean(`d') if `touse'
 						}
 					if `j'<`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
-					else 				gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
+					else gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
 					}
 				else {
 					if `j'<`jstar' 	gen double `moment`N_ineq''=`d'*(`zbar'-`Z')/(`zbar'*(1-`zbar')) if `touse'
@@ -342,7 +374,6 @@ cap program drop mvttest
 				loc moments `moments' `moment`N_ineq''
 				
 				}
-			
 			cmi_test (`moments') () `group' if `touse', `cmi_opts'
 			foreach stat in stat cv01 cv05 cv10 pval {
 				loc cmi_`stat'=r(`stat')
@@ -353,7 +384,7 @@ cap program drop mvttest
 		count if `touse'
 		ereturn post `b' `V', depname("`D'>=j") esample(`touse') obs(`r(N)')
 		
-		forvalues t=4/5 {
+		foreach  t in 3star 4 {
 			ereturn scalar F`t'=`F_`t''
 			ereturn scalar p_val`t'=`p`t''
 			ereturn scalar df`t'=`df`t''
@@ -389,22 +420,24 @@ cap program drop mvttest
 			if "`cmi'"!="nocmi" {
 				di "CMI-test of Assumption 3: {col 45}`stattype' test statistic {col 67}`: di %12.4f `cmi_stat''"
 				di "{col 45}Critical value, 1% {col 67}`: di %12.4f `cmi_cv01''"
-				di "{col 5}b_{j+1}>=b_j> for j<`thresholdj'{col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
-				di "{col 5}b_{j+1}<=b_j for j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `cmi_cv10''"
+				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>0 {col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
+				di "{col 5}b_j>=b_{j+1} for J>j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `cmi_cv10''"
 				di "{col 45}p-value {col 67}`: di %12.4f `cmi_pval''"
 				di "{hline 78}"
 				}
-			di "Test of Assumption 4: {col 45}F(`df4',`df_r4') {col 67}`: di %12.4f `F_4''"
-			di "{col 5}all b_j=0 except b_`thresholdj' {col 45}p-value {col 67}`: di %12.4f `p4''"
+			di "Test of Assumption 3*: {col 45}F(`df3star',`df_r3star') {col 67}`: di %12.4f `F_3star''"
+			di "{col 5}all b_j=0 except b_`thresholdj' {col 45}p-value {col 67}`: di %12.4f `p3star''"
 			di "{hline 78}"
-			di "Test of Assumption 5: {col 45}F(`df5',`df_r5') {col 67}`: di %12.4f `F_5''"
-			if "`X'"=="" di "{col 5}all b_j are the same {col 45}p-value {col 67}`: di %12.4f `p5''"
-			else di "{col 5}all b_j are the same within cells of X {col 45}p-value {col 67}`: di %12.4f `p5''"
+			di "Test of Assumption 4: {col 45}F(`df4',`df_r4') {col 67}`: di %12.4f `F_4''"
+			if "`X'"=="" di "{col 5}all b_j are the same {col 45}p-value {col 67}`: di %12.4f `p4''"
+			else di "{col 5}all b_j are the same within cells of X {col 45}p-value {col 67}`: di %12.4f `p4''"
 			di "{hline 78}"
 
 			}
 	
+	restore
 	}
+	
 	
 end
 }

@@ -56,9 +56,9 @@ b_{j+1}-b_j for j>=j*. For comparison, the violations in a model with no control
 allowing the user to see whether violations in some subgroups of X are averaged over.{p_end}
 
 {pstd}The paper provides testable conditions for the b_j coefficients, where b_j is the 
-first stage effect of Z on D* using j as the threshold. The special case in Assumption 4
-require all b_j to be 0 except b_j*, while Assumption 5 requires all b_j to be the same.
-Both these conditions can be tested using Chi2-tests.{p_end}
+first stage effect of Z on D* using j as the threshold. The special case in Assumption 3*
+require all b_j to be 0 except b_j*, while Assumption 4 requires all b_j to be the same.
+Both these conditions can be tested using G-tests.{p_end}
 
 {pstd}More generally, a necessary condition for instrument validity in this setting
 (Assumption 3) is given by{p_end}
@@ -74,7 +74,7 @@ et al. (2013), implemented using {helpb cmi_test}.{p_end}
 
 {pstd}
 Download data from NLSYM, used by Card (1995) {p_end}
-{phang2}{stata sysuse "card iv data r", clear: {cmd:. sysuse "card iv data r", clear}} ({it:click to run}){p_end}
+{phang2}{stata "use http://www.stata.com/data/jwooldridge/eacsap/card.dta, clear": {cmd:. use "http//www.stata.com/data/jwooldridge/eacsap/card.dta", clear}} ({it:click to run}){p_end}
 
 {pstd}
 Perform tests of instrument validity for the nearc4 instrument, instrumenting for treatment defined as years of education >=16{p_end}
@@ -95,12 +95,14 @@ Looking for violations within cells of smsa and region:{p_end}
 {p2col 5 20 24 2: Scalars}{p_end}
 {synopt:{cmd:e(N)}}number of observations{p_end}
 {synopt:{cmd:e(levels_X)}}Number of cells of indepvars{p_end}
+{synopt:{cmd:e(F3star)}}F-stat for the test of Assumption 3*{p_end}
+{synopt:{cmd:e(p_val3star)}}p-value for the F-test of Assumption 3*{p_end}
+{synopt:{cmd:e(df3star)}}Constraints tested for the F-test of Assumption 3*{p_end}
+{synopt:{cmd:e(df_r3star)}}Degrees of freedom for the F-test of Assumption 3*{p_end}
 {synopt:{cmd:e(F4)}}F-stat for the test of Assumption 4{p_end}
 {synopt:{cmd:e(p_val4)}}p-value for the F-test of Assumption 4{p_end}
 {synopt:{cmd:e(df4)}}Constraints tested for the F-test of Assumption 4{p_end}
-{synopt:{cmd:e(F5)}}F-stat for the test of Assumption 5{p_end}
-{synopt:{cmd:e(p_val5)}}p-value for the F-test of Assumption 5{p_end}
-{synopt:{cmd:e(df5)}}Constraints tested for the F-test of Assumption 5{p_end}
+{synopt:{cmd:e(df_r4)}}Degrees of freedom for the F-test of Assumption 4{p_end}
 {synopt:{cmd:e(N_ineq)}}number of inequalities tested (number of beta_j+1-beta_j pairs){p_end}
 {synopt:{cmd:e(N_ineqcells)}}number of inequalities by cells tested{p_end}'
 {synopt:{cmd:e(cmi_stat)}}The test statistic for the CMI-test of Assumption 2{p_end}
