@@ -281,7 +281,7 @@ cap program drop mvttest
 
 				twoway (bar vio jno, color(navy) lcolor(white) lwidth(medium) barwidth(0.4)) (bar maxvio jmax, color(maroon) lcolor(white) lwidth(medium) barwidth(0.4)) ///
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
-					xtitle("value of j") title("Maximum violation across cells of X") ///
+					xtitle("`D' at least") title("Maximum violation across cells of X") ///
 					legend(label(1 "violation without X") label(2 "maximum violation across cells of X") ring()) ///
 					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
 					
@@ -381,6 +381,7 @@ cap program drop mvttest
 			}
 		
 		//Post results
+		restore
 		count if `touse'
 		ereturn post `b' `V', depname("`D'>=j") esample(`touse') obs(`r(N)')
 		
@@ -435,7 +436,7 @@ cap program drop mvttest
 
 			}
 	
-	restore
+	
 	}
 	
 	
