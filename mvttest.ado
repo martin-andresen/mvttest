@@ -1,4 +1,4 @@
-*! mvttest v 1.0 02sep2020
+*! mvttest v 1.01 04jan2021
 *! Author: Martin E. Andresen
 *! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
@@ -190,8 +190,8 @@ cap program drop mvttest
 		mat rownames `V'=`colnames'
 		
 		//plot figure
+		tempname r
 		if "`plot'"!="noplot" {
-			tempname r
 			if `J'>20 loc small ,labsize(vsmall) angle(90)
 			if "`X'"!="" {
 				tempname orig noX maxvios
