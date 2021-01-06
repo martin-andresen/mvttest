@@ -1,4 +1,4 @@
-*! mvttest v 1.01 04jan2021
+*! mvttest v 1.02 06jan2020
 *! Author: Martin E. Andresen
 *! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
@@ -30,7 +30,7 @@ cap program drop mvttest
 		mac shift
 		loc X `*'
 		
-		if strpos("`cmi_opts'","cmv")>0 loc stattype "CvM"
+		if strpos("`cmi_opts'","ks")==0 loc stattype "CvM"
 		else loc stattype KS
 		
 		_fv_check_depvar `Z'
@@ -144,28 +144,32 @@ cap program drop mvttest
 		//perform F-tests of A3* and A4
 		foreach Xgroup in `Xlevs' {
 			loc test3star
-			loc test4
 			if "`X'"=="" loc loc pre
 			else loc pre `Xgroup'#
+			loc i=0
 			foreach j in `values' {
 				if `j'==`jzero' continue
 				capture di _b[`c'`Z'#`pre'`j'.`regno']
 				if _rc==0 {
+					loc ++i
 					if `j'<`jstar' {
 						loc test3star `test3star' `c'`Z'#`pre'`j'.`regno'
-						loc test4 `test4' `c'`Z'#`pre'`j'.`regno' =				
+						if `i'==1 loc test4 `c'`Z'#`pre'`j'.`regno'	
+						else loc test4 `test4'=`c'`Z'#`pre'`j'.`regno'	
 						}
 					else if `j'>`thresholdj' {
 						loc test3star `test3star' `c'`Z'#`pre'`j'.`regno'
-						loc test4 `test4' `c'`Z'#`pre'`j'.`regno' =
+						if `i'==1 loc test4  `c'`Z'#`pre'`j'.`regno'
+						else loc test4 `test4'=`c'`Z'#`pre'`j'.`regno'	
 						}					
 					}
 				}
-			loc teststring3star `teststring3star' (`test3star')
-			loc teststring4 `teststring4' (`test4' `c'`Z'#`pre'`thresholdj'.`regno' )
+				loc teststring3star `teststring3star' (`test3star')
+				capture di _b[`c'`Z'#`pre'`thresholdj'.`regno']
+				if _rc==0 loc teststring4 `teststring4' (`test4' = `c'`Z'#`pre'`thresholdj'.`regno' )
+				else loc teststring4 `teststring4' (`test4')
 			}
 			
-
 		foreach t in 3star 4 {
 			if "`teststring`t''"!="" {
 				test `teststring`t''
