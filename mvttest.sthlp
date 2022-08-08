@@ -25,6 +25,7 @@
 {synopt:{opt graph:opts{string}}}options for the graph. Overrides default looks. See {helpb twoway_options}{p_end}
 {synopt:{opt nocmi}}turns off condititional moment inequality tests.{p_end}
 {synopt:{opt noplot}}Does not display graph.{p_end}
+{synopt:{opt cluster(clustvar)}}Cluster standard errors on {it:clustvar}.{p_end}
 
 {p2colreset}{...}
 {p 4 6 2}
@@ -33,7 +34,7 @@
 {title:Description}
 
 {pstd}
-{cmd:mvttest} performs F-and conditional moment inequality tests of instrument validity in settings where 
+{cmd:mvttest} performs F-tests and conditional moment inequality tests of instrument validity in settings where 
 a multivalued treatment is binarized, see Andresen and Huber (2020).
 
 
