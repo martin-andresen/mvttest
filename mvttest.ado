@@ -1,4 +1,4 @@
-*! mvttest v 1.02 06jan2020
+*! mvttest v 1.03 02aug2022
 *! Author: Martin E. Andresen
 *! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
@@ -12,6 +12,7 @@ cap program drop mvttest
 				*/noPlot				/* Do not plot graph 
 				*/keepsingletons		/* Keeps observations in singleton groups
 				*/nocmi					/* Do not perform CMI-tests
+				*/cluster(varlist)		/* Cluster standard errors
 				*/]
 	
 	
@@ -19,7 +20,7 @@ cap program drop mvttest
 		marksample touse
 		preserve
 		
-		keep `touse' `varlist'
+		keep `touse' `varlist' `cluster'
 		keep if `touse'
 		
 		//Parse and check input
@@ -35,8 +36,8 @@ cap program drop mvttest
 		
 		_fv_check_depvar `Z'
 		tab `Z' if `touse'
-		if `r(r)'==2 loc c 1.
-		else loc c c.
+		if `r(r)'==2 loc c 1. //binary instrument
+		else loc c c. //continuous instrument
 		
 		//chech user written programs installed
 		foreach prog in reghdfe cmi_test {
@@ -48,7 +49,7 @@ cap program drop mvttest
 			}
 		
 		tempvar id regno group d expand include
-				
+		
 		//drop singleton groups, determine cells of X
 		if "`X'"!="" {
 			tempvar N_g
@@ -138,8 +139,9 @@ cap program drop mvttest
 	
 		
 		replace `D'=`D'>=`regno'
-
-		reghdfe `D' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `id') `keepsingletons' nocons
+		
+		if "`cluster'"=="" loc cluster `id'
+		reghdfe `D' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
 				
 		//perform F-tests of A3* and A4
 		foreach Xgroup in `Xlevs' {
@@ -187,6 +189,10 @@ cap program drop mvttest
 		local colnames: colnames `b'
 		local colnames `=subinstr("`colnames'","`c'`Z'#","",.)'
 		if "`c'"=="1." local colnames `=subinstr("`colnames'","1o.`Z'#","",.)'
+		else {
+			local colnames `=subinstr("`colnames'","#co.`Z'","",.)'
+			local colnames `=subinstr("`colnames'","#c.`Z'","",.)'
+		}
 		local colnames `=subinstr("`colnames'","`regno'","j",.)'
 		
 		mat colnames `b'=`colnames'
@@ -200,9 +206,10 @@ cap program drop mvttest
 			if "`X'"!="" {
 				tempname orig noX maxvios
 				est sto `orig'
-				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `id')
+				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `cluster')
 				clear
 				est sto `noX'
+				
 				est restore `orig'
 				eret di, level(95)
 				mat `r'=r(table)'
@@ -214,16 +221,25 @@ cap program drop mvttest
 					loc ++i
 					replace parm="`name'" in `i'
 					}
+					
+				
 				split parm, parse(#)
 				loc nvars=r(nvars)
-				split parm`nvars', parse(.)
-				destring parm`nvars'1, ignore(o b) replace
-				rename parm`nvars'1 j
-				forvalues n=2/`=`nvars'-1' {
-					if `n'==2 loc gen parm`n'
-					else loc gen `gen'+parm`n'
-					}
-				gen str group=`gen'
+				if "`c'"=="c." {
+					split parm`=`nvars'-1', parse(.)
+					destring parm`=`nvars'-1'1, ignore(o b) replace
+					rename parm`=`nvars'-1'1 j
+					drop parm parm`=`nvars'-1'2 parm`=`nvars'-1'
+				}
+				
+				else {
+					split parm`nvars', parse(.)
+					destring parm`nvars'1, ignore(o b) replace
+					rename parm`nvars'1 j
+					drop  parm parm`nvars'2 parm`nvars'
+				}
+				
+				egen group=group(parm*)
 				sort group j
 				by group: gen maxvio=b-b[_n+1] if j<`jstar'
 				by group: replace maxvio=-(b-b[_n+1]) if j>=`jstar'
@@ -247,9 +263,16 @@ cap program drop mvttest
 				replace parm="`name'" in `i'
 				}
 			split parm, parse(#)
-			split parm2, parse(.)
-			destring parm21, replace ignore(o b)
-			rename parm21 j
+			if "`c'"=="1." {
+				split parm2, parse(.)
+				destring parm21, replace ignore(o b)
+				rename parm21 j
+			}
+			else {
+				split parm1, parse(.)
+				destring parm11, replace ignore(o b)
+				rename parm11 j
+			}
 			
 			if "`X'"=="" {
 				levelsof j, local(levj)
@@ -269,6 +292,7 @@ cap program drop mvttest
 				}
 				
 			else {
+				
 				gen vio=b-b[_n+1] if j<`jstar'
 				replace vio=-(b-b[_n+1]) if j>=`jstar'
 				drop if vio==.
@@ -296,7 +320,6 @@ cap program drop mvttest
 		
 				
 			}
-			
 		
 		//CMI-test
 		
@@ -317,17 +340,24 @@ cap program drop mvttest
 			drop if se==0|se==.
 			split parm, parse(#)
 			loc nvars=r(nvars)
-			split parm`nvars', parse(.)
-			destring parm`nvars'1, ignore(o b) replace
-			rename parm`nvars'1 j
-			if "`X'"!="" {
-				forvalues n=2/`=`nvars'-1' {
-					if `n'==2 loc gen parm`n'
-					else loc gen `gen'+parm`n'
-					}
-				gen str group=`gen'
+			
+			loc nvars=r(nvars)
+							if "`c'"=="c." {
+					split parm`=`nvars'-1', parse(.)
+					destring parm`=`nvars'-1'1, ignore(o b) replace
+					rename parm`=`nvars'-1'1 j
+					drop parm parm`=`nvars'-1'2 parm`=`nvars'-1'
 				}
-			else  rename parm1 group
+				
+				else {
+					split parm`nvars', parse(.)
+					destring parm`nvars'1, ignore(o b) replace
+					rename parm`nvars'1 j
+					drop  parm parm`nvars'2 parm`nvars'
+				}
+				
+			
+			egen group=group(parm*)
 			sort group j
 			bys group: drop if _n==_N
 			levelsof j, local(levj)
@@ -378,6 +408,7 @@ cap program drop mvttest
 				loc moments `moments' `moment`N_ineq''
 				
 				}
+			noi su `moments'
 			cmi_test (`moments') () `group' if `touse', `cmi_opts'
 			foreach stat in stat cv01 cv05 cv10 pval {
 				loc cmi_`stat'=r(`stat')
@@ -425,8 +456,8 @@ cap program drop mvttest
 			if "`cmi'"!="nocmi" {
 				di "CMI-test of Assumption 3: {col 45}`stattype' test statistic {col 67}`: di %12.4f `cmi_stat''"
 				di "{col 45}Critical value, 1% {col 67}`: di %12.4f `cmi_cv01''"
-				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>0 {col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
-				di "{col 5}b_j>=b_{j+1} for J>j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `cmi_cv10''"
+				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>`jzero' {col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
+				di "{col 5}b_j>=b_{j+1} for `J'>j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `cmi_cv10''"
 				di "{col 45}p-value {col 67}`: di %12.4f `cmi_pval''"
 				di "{hline 78}"
 				}
