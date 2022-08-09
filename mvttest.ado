@@ -1,8 +1,8 @@
-*! mvttest v 1.03 02aug2022
+*! mvttest v 1.1 09aug2022
 *! Author: Martin E. Andresen
 *! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
-cap program drop mvttest
+cap program drop mvttest bayesboot
 {
 	program define mvttest, eclass
 		version 13.0
@@ -13,6 +13,7 @@ cap program drop mvttest
 				*/keepsingletons		/* Keeps observations in singleton groups
 				*/nocmi					/* Do not perform CMI-tests
 				*/cluster(varlist)		/* Cluster standard errors
+				*/bootreps(integer 0)	/* Perform sup-t-tests in addition/instead of CMI-tests
 				*/]
 	
 	
@@ -48,7 +49,13 @@ cap program drop mvttest
 				}
 			}
 		
+		if `bootreps'<0 {
+			noi di in red "Bootstrap reps specified in bootreps() must be nonnegative."
+			exit
+		}
+		
 		tempvar id regno group d expand include
+		tempname b0 boot orig
 		
 		//drop singleton groups, determine cells of X
 		if "`X'"!="" {
@@ -137,12 +144,15 @@ cap program drop mvttest
 			}
 		else replace `include'=1
 	
-		
+		tempvar d
+		gen `d'=`D'!=`regno'-1 if `regno'-1<`jstar'
+		replace `d'=`D'==`regno'-1 if `regno'-1>=`jstar'
 		replace `D'=`D'>=`regno'
 		
 		if "`cluster'"=="" loc cluster `id'
 		reghdfe `D' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
-				
+		est sto `orig'
+		
 		//perform F-tests of A3* and A4
 		foreach Xgroup in `Xlevs' {
 			loc test3star
@@ -204,10 +214,10 @@ cap program drop mvttest
 		if "`plot'"!="noplot" {
 			if `J'>20 loc small ,labsize(vsmall) angle(90)
 			if "`X'"!="" {
-				tempname orig noX maxvios
-				est sto `orig'
+				tempname noX maxvios
+
 				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `cluster')
-				clear
+				drop _all
 				est sto `noX'
 				
 				est restore `orig'
@@ -251,7 +261,7 @@ cap program drop mvttest
 				est restore `noX'
 				}
 			
-			clear
+			drop _all
 			eret di, level(95)
 			mat `r'=r(table)'
 			svmat `r', names(col)
@@ -285,7 +295,7 @@ cap program drop mvttest
 				gen jno=_n
 				twoway (bar b jno, color(navy) lcolor(white) lwidth(medium)) (rcap ll ul jno, color(navy)) ///
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
-					xtitle("`D' at least") legend(off) title("First stage effect using various thresholds") ///
+					xtitle("`D' at least") legend(off) title("First stage effect of `Z' using various thresholds") ///
 					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
 				
 
@@ -321,12 +331,54 @@ cap program drop mvttest
 				
 			}
 		
+	
+		//Sup-t test
+		if `bootreps'>0 {
+			tempname b0 t0 Vboot se0 sort pmat
+			reghdfe `d' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
+			mat `b0'=e(b)
+			loc names: colnames `b0'
+			
+			mat `Vboot'=e(V)
+			mata: st_matrix("`se0'",sqrt(diagonal(st_matrix("`Vboot'")))')
+			mata: st_matrix("`t0'",st_matrix("`b0'"):/st_matrix("`se0'"))
+			mata: st_matrix("`sort'",sort(st_matrix("`t0'")',1)')
+			
+			noi bayesboot `d' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') cluster(`cluster') opts(`keepsingletons' nocons)
+			noi simulate  _b _se, reps(`bootreps'): bayesboot `d' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') cluster(`cluster') opts(`keepsingletons' nocons)
+			
+			loc numcells=colsof(`b0')
+			forvalues i=1/`numcells' {
+				gen t`i'=(_sim_`i'-`b0'[1,`i'])/_sim_`=`i'+`numcells''
+			}
+
+			loc i=0
+			foreach name in `names' {
+				loc ++i
+				if abs(`t0'[1,`i']-`sort'[1,1])<1e-12 continue, break
+			}
+
+			egen mint=rowmin(t*)
+			loc tval_boot=`t0'[1,`i']
+			count if mint<.
+			loc validreps=r(N)
+			count if mint<=`t0'[1,`i']
+			loc pboot =  `=(r(N)+1)/(`validreps'+1)'
+			noi su mint, d
+			noi _pctile mint, percentiles(1 5 10)
+			loc boot_cv01=r(r1)
+			loc boot_cv05=r(r2)
+			loc boot_cv10=r(r3)
+		}
+		
+		
 		//CMI-test
 		
 		if "`cmi'"!="nocmi" {
 					
 			//determine coef comparisons  - drop j if beta_j+1 and beta_j cannot both be estimated (within a cell of  X)
-			clear
+			drop _all
+			est restore `orig'
 			eret di, level(95)
 			mat `r'=r(table)'
 			loc parmnames: rownames `r'
@@ -366,7 +418,8 @@ cap program drop mvttest
 
 			
 			//construct moment inqualities	
-			u `tmpdata', clear
+			drop _all
+			u `tmpdata'
 			if "`X'"!="" {
 				tempvar zbar
 				bys `group': egen double `zbar'=mean(`Z') if `touse'
@@ -377,18 +430,24 @@ cap program drop mvttest
 				loc zbar=r(mean)	
 				}
 			
-			tempvar d
+			tempvar d denom
 			gen `d'=.
 			
 			
-			loc N_ineq=0 
+			loc N_ineq=0
+			if "`c'"=="c." {
+				gen double `denom'=(`Z'-`zbar')^2
+				noi su `denom'
+				loc denom=r(sum)
+				loc N=r(N)
+			}
 			foreach j in `levj' {
-				if inlist(`j',`jzero',`J') continue
+				if inlist(`j',`J') continue
 				loc ++N_ineq
-				replace `d'=`D'==`j' if `touse'		
+				replace `d'=`D'==`j' if `touse'
 				
 				tempvar moment`N_ineq' 
-				if "`c'"=="c." {	
+				if "`c'"=="c." {
 					if "`X'"=="" {
 						su `d' if `touse', meanonly
 						loc dbar=r(mean)
@@ -397,8 +456,9 @@ cap program drop mvttest
 						cap drop `dbar'
 						bys `group': egen `dbar'=mean(`d') if `touse'
 						}
-					if `j'<`jstar' 	gen double `moment`N_ineq''=-(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
-					else gen double `moment`N_ineq''=(`d'*(`Z'-`zbar')-`dbar'*(`Z'-`zbar'))/(`Z'^2-2*`Z'*`zbar'+`zbar'^2) if `touse'
+					
+					if `j'<`jstar' 	gen double `moment`N_ineq''=-`N'*((`d'-`dbar')*(`Z'-`zbar'))/`denom' if `touse'
+					else gen double `moment`N_ineq''=`N'*((`d'-`dbar')*(`Z'-`zbar'))/`denom' if `touse'
 					}
 				else {
 					if `j'<`jstar' 	gen double `moment`N_ineq''=`d'*(`zbar'-`Z')/(`zbar'*(1-`zbar')) if `touse'
@@ -406,14 +466,17 @@ cap program drop mvttest
 					}
 				
 				loc moments `moments' `moment`N_ineq''
-				
+			
 				}
-			noi su `moments'
-			cmi_test (`moments') () `group' if `touse', `cmi_opts'
+			cmi_test (`moments') () `X' if `touse', `cmi_opts'
 			foreach stat in stat cv01 cv05 cv10 pval {
 				loc cmi_`stat'=r(`stat')
 				}		
 			}
+		
+	
+
+		
 		
 		//Post results
 		restore
@@ -456,9 +519,17 @@ cap program drop mvttest
 			if "`cmi'"!="nocmi" {
 				di "CMI-test of Assumption 3: {col 45}`stattype' test statistic {col 67}`: di %12.4f `cmi_stat''"
 				di "{col 45}Critical value, 1% {col 67}`: di %12.4f `cmi_cv01''"
-				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>`jzero' {col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
+				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>=`jzero' {col 45}Critical value, 5% {col 67}`: di %12.4f `cmi_cv05''"
 				di "{col 5}b_j>=b_{j+1} for `J'>j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `cmi_cv10''"
 				di "{col 45}p-value {col 67}`: di %12.4f `cmi_pval''"
+				di "{hline 78}"
+				}
+			if `bootreps'>0 {
+				di "Bootstrap test of Assumption 3: {col 45}Test statistic {col 67}`: di %12.4f `tval_boot''"
+				di "{col 45}Critical value, 1% {col 67}`: di %12.4f `boot_cv01''"
+				di "{col 5}b_{j+1}>=b_j for `thresholdj'>j>=`jzero' {col 45}Critical value, 5% {col 67}`: di %12.4f `boot_cv05''"
+				di "{col 5}b_j>=b_{j+1} for `J'>j>=`thresholdj' {col 45}Critical value, 10% {col 67}`: di %12.4f `boot_cv10''"
+				di "{col 45}p-value {col 67}`: di %12.4f `pboot''"
 				di "{hline 78}"
 				}
 			di "Test of Assumption 3*: {col 45}F(`df3star',`df_r3star') {col 67}`: di %12.4f `F_3star''"
