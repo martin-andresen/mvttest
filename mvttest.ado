@@ -1,4 +1,4 @@
-*! mvttest v 1.1 09aug2022
+*! mvttest v 1.2 16aug2022
 *! Author: Martin E. Andresen
 *! For "Instrument-based estimation with binarized treatments: Issues and tests for the exclusion restriction", joint with Martin Huber
 
@@ -209,31 +209,72 @@ cap program drop mvttest bayesboot
 		mat colnames `V'=`colnames'
 		mat rownames `V'=`colnames'
 		
-		//plot figure
-		tempname r
+	
+		//estijmate baseline violations if a) plotting w/ X or b) performing sup-t-teststring3star
+		if ("`plot'"!="noplot"&"`X'"!="") | `bootreps'>0 {
+			tempname b0 t0 bboot seboot r tmat tab tboot tval
+			tempvar boott
+			replace `regno'=`regno'-1
+			
+			reghdfe `d' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons nosample
+			mat `tab'=r(table)
+			mat `b0'=`tab'[1,1..`=colsof(`tab')']
+			mat `t0'=`tab'[3,1..`=colsof(`tab')']
+			mata: st_matrix("`t0'",min(st_matrix("`t0'")))
+			loc tval_boot=`t0'[1,1]
+		
+		}
+	
+		//Sup-t test
+		if `bootreps'>0 {
+			gen `tboot'=.
+			qui forvalues rep=1/`bootreps' {
+				if `rep'==1 nois _dots 0, title(Bayesian bootstrap repetitions for Romano-Wolf step-down inference) reps(`bootreps')
+				gen `r'=rgamma(2,2)
+				bys `cluster': replace `r'=`r'[1]
+				reghdfe `d' `c'`Z'`xabs'#`regno' if `include' [aw=`r'], absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
+				mat `tab'=r(table)
+				mat `bboot'=`tab'[1,1..`=colsof(`tab')']
+				mat `seboot'=`tab'[2,1..`=colsof(`tab')']
+				mata: st_matrix("`tval'",min((st_matrix("`bboot'")-st_matrix("`b0'")):/st_matrix("`seboot'")))
+				replace `tboot'=`tval'[1,1] in `rep'
+				drop `r'
+				nois _dots `rep' 0
+				}
+				
+			count if `tboot'<.
+			loc validreps=r(N)
+			count if `tboot'<=`tval_boot'
+			loc pboot =  `=(r(N)+1)/(`validreps'+1)'
+			
+			_pctile `tboot', percentiles(1 5 10)
+			loc boot_cv01=r(r1)
+			loc boot_cv05=r(r2)
+			loc boot_cv10=r(r3)
+		}
+		
+
+	//plot figure
 		if "`plot'"!="noplot" {
 			if `J'>20 loc small ,labsize(vsmall) angle(90)
 			if "`X'"!="" {
-				tempname noX maxvios
-
-				reghdfe `D' `c'`Z'#`regno', absorb(`regno') nosample `keepsingletons' nocons vce(cluster `cluster')
+				est sto `orig'
+				tempname noX
+				reghdfe `d' `c'`Z'#`regno' if `include', absorb(`regno') vce(cluster `cluster') `keepsingletons' nocons nosample
+				mat `noX'=r(table)
+				mat `noX'=`noX''
 				drop _all
-				est sto `noX'
-				
-				est restore `orig'
-				eret di, level(95)
-				mat `r'=r(table)'
-				loc parmnames: rownames `r'
-				svmat `r', names(col)
+				loc parmnames: colnames `b0'
+				mat `b0'=`b0''
+				svmat `b0', names(col)
 				loc i=0
 				gen parm=""
 				foreach name in `parmnames' {
 					loc ++i
 					replace parm="`name'" in `i'
 					}
-					
-				
-				split parm, parse(#)
+								
+				split parm, parse(#)				
 				loc nvars=r(nvars)
 				if "`c'"=="c." {
 					split parm`=`nvars'-1', parse(.)
@@ -250,49 +291,51 @@ cap program drop mvttest bayesboot
 				}
 				
 				egen group=group(parm*)
-				sort group j
-				by group: gen maxvio=b-b[_n+1] if j<`jstar'
-				by group: replace maxvio=-(b-b[_n+1]) if j>=`jstar'
-				drop if maxvio==.
-				sort j maxvio
-				bys j: drop if _n!=_N
+				bys j (b): drop if _n!=1
+				rename b maxvio
 				keep maxvio j
-				save `maxvios', replace
-				est restore `noX'
-				}
 			
-			drop _all
-			eret di, level(95)
-			mat `r'=r(table)'
-			svmat `r', names(col)
-			loc parmnames: rownames `r'
-			loc i=0
-			gen parm=""
-			foreach name in `parmnames' {
-				loc ++i
-				replace parm="`name'" in `i'
-				}
-			split parm, parse(#)
-			if "`c'"=="1." {
-				split parm2, parse(.)
-				destring parm21, replace ignore(o b)
-				rename parm21 j
-			}
-			else {
-				split parm1, parse(.)
-				destring parm11, replace ignore(o b)
-				rename parm11 j
-			}
-			
-			if "`X'"=="" {
-				levelsof j, local(levj)
+				svmat `noX', names(col)
+				
+				replace b=-b
+				replace maxvio=-maxvio
+				
 				loc no=0
-				foreach lev in `levj' {
+				foreach lev in `values ' {
 					loc ++no
-					loc xlabels `xlabels' `no' "`lev'"
+					if `lev'<`J' loc xlabels `xlabels' `no' "`lev'"
 					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
 					}
+				gen jno=_n-0.2
+				gen jmax=jno+0.4
+				
+				twoway (bar b jno, color(navy) lcolor(white) lwidth(medium) barwidth(0.4)) (bar maxvio jmax, color(maroon) lcolor(white) lwidth(medium) barwidth(0.4)) ///
+					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
+					xtitle("level of `D'") title("Maximum violation across cells of X") ///
+					legend(label(1 "violation without X") label(2 "maximum violation across cells of X") ring()) ///
+					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
+					}
+			
+			else {
+				drop  _all
+				tempname r
+				est restore `orig'
+				eret di
+				mat `r'=r(table)'
+				svmat `r', names(col)
+				
+				loc no=0
+				gen j=.
+				foreach lev in `values' {
+					if `lev'<=`jzero' continue 
+					loc ++no
+					replace j=`lev' in `no'
+					loc xlabels `xlabels' `no' "`lev'"
+					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
+				}
+				
 				gen jno=_n
+				
 				twoway (bar b jno, color(navy) lcolor(white) lwidth(medium)) (rcap ll ul jno, color(navy)) ///
 					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
 					xtitle("`D' at least") legend(off) title("First stage effect of `Z' using various thresholds") ///
@@ -301,83 +344,14 @@ cap program drop mvttest bayesboot
 
 				}
 				
-			else {
-				
-				gen vio=b-b[_n+1] if j<`jstar'
-				replace vio=-(b-b[_n+1]) if j>=`jstar'
-				drop if vio==.
-				merge 1:1 j using `maxvios', nogen keep(1 3)
-				levelsof j, local(levj)
-				loc no=0
-				foreach lev in `levj' {
-					loc ++no
-					loc xlabels `xlabels' `no' "`lev'"
-					if `lev'>=`jstar'&"`xline'"=="" loc xline=`no'-0.5
-					}
-				gen jno=_n-0.2
-				gen jmax=jno+0.4
-
-				twoway (bar vio jno, color(navy) lcolor(white) lwidth(medium) barwidth(0.4)) (bar maxvio jmax, color(maroon) lcolor(white) lwidth(medium) barwidth(0.4)) ///
-					,  scheme(s1color) graphregion(color(white)) plotregion(lcolor(black)) ///
-					xtitle("`D' at least") title("Maximum violation across cells of X") ///
-					legend(label(1 "violation without X") label(2 "maximum violation across cells of X") ring()) ///
-					xlabel(`xlabels' `small') xline(`xline', lcolor(black) lpattern(dash)) `graph_opts'
-					
-				est restore `orig'
-				est drop `orig' `noX'
-				}
-			
-		
-				
 			}
-		
-	
-		//Sup-t test
-		if `bootreps'>0 {
-			tempname b0 t0 Vboot se0 sort pmat
-			reghdfe `d' `c'`Z'`xabs'#`regno' if `include', absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
-			mat `b0'=e(b)
-			loc names: colnames `b0'
 			
-			mat `Vboot'=e(V)
-			mata: st_matrix("`se0'",sqrt(diagonal(st_matrix("`Vboot'")))')
-			mata: st_matrix("`t0'",st_matrix("`b0'"):/st_matrix("`se0'"))
-			mata: st_matrix("`sort'",sort(st_matrix("`t0'")',1)')
-			
-			noi bayesboot `d' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') cluster(`cluster') opts(`keepsingletons' nocons)
-			noi simulate  _b _se, reps(`bootreps'): bayesboot `d' `c'`Z'`xabs'#`regno', absorb(`regno'`xabs') cluster(`cluster') opts(`keepsingletons' nocons)
-			
-			loc numcells=colsof(`b0')
-			forvalues i=1/`numcells' {
-				gen t`i'=(_sim_`i'-`b0'[1,`i'])/_sim_`=`i'+`numcells''
-			}
-
-			loc i=0
-			foreach name in `names' {
-				loc ++i
-				if abs(`t0'[1,`i']-`sort'[1,1])<1e-12 continue, break
-			}
-
-			egen mint=rowmin(t*)
-			loc tval_boot=`t0'[1,`i']
-			count if mint<.
-			loc validreps=r(N)
-			count if mint<=`t0'[1,`i']
-			loc pboot =  `=(r(N)+1)/(`validreps'+1)'
-			noi su mint, d
-			noi _pctile mint, percentiles(1 5 10)
-			loc boot_cv01=r(r1)
-			loc boot_cv05=r(r2)
-			loc boot_cv10=r(r3)
-		}
-		
-		
 		//CMI-test
 		
 		if "`cmi'"!="nocmi" {
-					
 			//determine coef comparisons  - drop j if beta_j+1 and beta_j cannot both be estimated (within a cell of  X)
 			drop _all
+			tempname r
 			est restore `orig'
 			eret di, level(95)
 			mat `r'=r(table)'
@@ -394,21 +368,20 @@ cap program drop mvttest bayesboot
 			loc nvars=r(nvars)
 			
 			loc nvars=r(nvars)
-							if "`c'"=="c." {
-					split parm`=`nvars'-1', parse(.)
-					destring parm`=`nvars'-1'1, ignore(o b) replace
-					rename parm`=`nvars'-1'1 j
-					drop parm parm`=`nvars'-1'2 parm`=`nvars'-1'
-				}
-				
-				else {
-					split parm`nvars', parse(.)
-					destring parm`nvars'1, ignore(o b) replace
-					rename parm`nvars'1 j
-					drop  parm parm`nvars'2 parm`nvars'
-				}
-				
+			if "`c'"=="c." {
+				split parm`=`nvars'-1', parse(.)
+				destring parm`=`nvars'-1'1, ignore(o b) replace
+				rename parm`=`nvars'-1'1 j
+				drop parm parm`=`nvars'-1'2 parm`=`nvars'-1'
+			}
 			
+			else {
+				split parm`nvars', parse(.)
+				destring parm`nvars'1, ignore(o b) replace
+				rename parm`nvars'1 j
+				drop  parm parm`nvars'2 parm`nvars'
+			}
+					
 			egen group=group(parm*)
 			sort group j
 			bys group: drop if _n==_N
@@ -436,10 +409,19 @@ cap program drop mvttest bayesboot
 			
 			loc N_ineq=0
 			if "`c'"=="c." {
-				gen double `denom'=(`Z'-`zbar')^2
-				noi su `denom'
-				loc denom=r(sum)
-				loc N=r(N)
+				tempname tmp
+				gen double `tmp'=(`Z'-`zbar')^2
+				if "`X'"=="" {
+					su `tmp'
+					loc denom=r(sum)
+					loc N=r(N)
+				}
+				else {
+					tempvar denom N	
+					bys `group': egen `denom'=total(`tmp')
+					bys `group': egen `N'=count(`tmp')
+				}
+				
 			}
 			foreach j in `levj' {
 				if inlist(`j',`J') continue
@@ -468,7 +450,15 @@ cap program drop mvttest bayesboot
 				loc moments `moments' `moment`N_ineq''
 			
 				}
-			cmi_test (`moments') () `X' if `touse', `cmi_opts'
+				
+			if "`X'"=="" {
+				tempvar cons 
+				gen `cons'=1
+				loc cond `cons'
+			}
+			else loc cond `X'
+			
+			cmi_test (`moments') () `cond' if `touse', `cmi_opts'
 			foreach stat in stat cv01 cv05 cv10 pval {
 				loc cmi_`stat'=r(`stat')
 				}		

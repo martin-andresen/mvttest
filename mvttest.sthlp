@@ -26,6 +26,7 @@
 {synopt:{opt nocmi}}turns off condititional moment inequality tests.{p_end}
 {synopt:{opt noplot}}Does not display graph.{p_end}
 {synopt:{opt cluster(clustvar)}}Cluster standard errors on {it:clustvar}.{p_end}
+{synopt:{opt bootreps(#)}}Perform bayesian bootstrap-based tests of Assumption 3 using Romano-Wolf step-down inference.{p_end}
 
 {p2colreset}{...}
 {p 4 6 2}
