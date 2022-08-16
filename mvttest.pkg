@@ -4,6 +4,6 @@ d
 d {bf:M. E. Andresen, Research department, Statistics Norway}
 d Tests of the exclusion restriction with multivalued, binarized treatments.  After installation, see help {bf:mvttest}.
 d
-d Distribution-Date: 2020902
+d Distribution-Date: 20220816
 f mvttest.ado
 f mvttest.sthlp
