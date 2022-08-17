@@ -230,7 +230,7 @@ cap program drop mvttest bayesboot
 			gen `tboot'=.
 			qui forvalues rep=1/`bootreps' {
 				if `rep'==1 nois _dots 0, title(Bayesian bootstrap repetitions for Romano-Wolf step-down inference) reps(`bootreps')
-				gen `r'=rgamma(2,2)
+				gen `r'=rgamma(1,1)
 				bys `cluster': replace `r'=`r'[1]
 				reghdfe `d' `c'`Z'`xabs'#`regno' if `include' [aw=`r'], absorb(`regno'`xabs') vce(cluster `cluster') `keepsingletons' nocons
 				mat `tab'=r(table)
